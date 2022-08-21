@@ -1,0 +1,144 @@
+﻿@page "/"
+@using ATM_Blazor.Models
+@using System.Diagnostics
+
+<PageTitle>Banknotes</PageTitle>
+
+<h1>Banknotes</h1>
+<div id="createSection">
+    <label>Колличество кассет (от 1 до 8): <input type="number" name="cassettesCount" id="cassettesCountInput" min="1" max="8" @bind="@cassetCount"/></label>
+    <button @onclick="@CreateCassets">Создать кассеты</button>
+</div>
+<div id="errorContainer">
+</div>
+
+<div id="cassettesContainer">
+    @if (Cassets != null)
+    {
+        foreach (var casset in Cassets)
+        {
+            <EditForm EditContext="@editContext">
+                <DataAnnotationsValidator/>
+                <ValidationSummary Model="@casset"/>
+                <h4>Кассета ID:@casset.id</h4>
+                <p><label>
+                    Номинал:
+                    <InputSelect @bind-Value="casset.nominal">
+                        @foreach (var nominal in nominals)
+                        {
+                            <option value="@nominal">@nominal</option>
+                        }
+                    </InputSelect>
+                </label></p>
+                <p><label>Кол-во купюр: <InputNumber @bind-Value="casset.countBanknotes"/></label></p>
+                <p><label>Неисправна: <InputCheckbox @bind-Value="casset.faulty"/></label></p>
+            </EditForm>
+        }
+        <br>
+        <p>
+            <input type="number" placeholder="Введите сумму в руб без копеек" min="0" @bind="@Change">
+        </p>
+        <p>
+            <input type="submit" value="Вычислить" @onclick="@Solve">
+        </p>
+
+        <div>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Номинал</th>
+                    <th>Кол-во купюр</th>
+                    <th>Неисправна</th>
+                </tr>
+                @foreach (var casset in Cassets)
+                {
+                    <tr>
+                        <td>@casset.id</td>
+                        <td>@casset.nominal</td>
+                        <td>@casset.countBanknotes</td>
+                        <td>@casset.faulty</td>
+                    </tr>
+                }
+            </table>
+            <label>Сумма: @Change</label>
+        </div>
+        @if (Result != null)
+        {
+            <div>
+                <table>
+                    <tr>
+                        <th>ID Кассеты</th>
+                        <th>Кол-во кюпер которое будет выдано</th>
+                    </tr>
+                    @foreach (var (key, val) in Result)
+                    {
+                        <tr>
+                            <td>@key</td>
+                            <td>@val</td>
+                        </tr>
+                    }
+                </table>
+                <label>@Message</label>
+            </div>
+        }
+    }
+</div>
+
+@code
+{
+    private int cassetCount;
+    private int[] nominals = { 100, 200, 500, 1000, 2000, 5000 };
+    private List<CassetModel>? Cassets;
+    private Dictionary<int, int>? Result;
+    private string Message;
+
+    private EditContext? editContext;
+
+    private void CreateCassets()
+    {
+        Cassets = new List<CassetModel>();
+        for (int i = 0; i < cassetCount; i++)
+        {
+            Cassets.Add(new CassetModel() { id = i });
+        }
+        editContext = new EditContext(Cassets);
+    }
+
+    public int Change { get; set; }
+
+    private void Solve()
+    {
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
+        Result = new Dictionary<int, int>();
+        var change = Change;
+        var cassets = new List<CassetModel>(Cassets.Count);
+        Cassets.ForEach(item => cassets.Add((CassetModel)item.Clone()));
+        cassets.Sort((x, y) => y.nominal - x.nominal);
+        Console.WriteLine(cassets);
+        while (change > 0)
+        {
+            if (cassets.All(x => x.faulty || x.nominal > change || x.countBanknotes == 0))
+            {
+                Result = new Dictionary<int, int> { { 0, 0 } };
+                stopwatch.Stop();
+                Message = "Не удалось выдать сдачу!";
+                return;
+            }
+            foreach (var casset in cassets)
+            {
+                if (casset.faulty || casset.nominal > change || casset.countBanknotes == 0)
+                {
+                    continue;
+                }
+                var countBanknote = Math.Min(casset.countBanknotes, change / casset.nominal);
+                change -= casset.nominal * countBanknote;
+                casset.countBanknotes -= countBanknote;
+                Result.Add(casset.id, countBanknote);
+            }
+        }
+        stopwatch.Stop();
+        var ts = stopwatch.Elapsed;
+        Message = $"Затраченноe время {ts.TotalMilliseconds} MS";
+    }
+}
